@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Menú El Sabor de la Cachapa</title> <style>
+    <title>Menú El Sabor de la Cachapa</title>
+    <style>
         /* ==================================== */
         /* ESTILOS CSS BASE */
         /* ==================================== */
@@ -231,6 +232,16 @@
             color: white;
             text-shadow: 1px 1px 2px #333;
         }
+        .tasa-bcv-display {
+            font-weight: bold;
+            color: #007bff; /* Un color que destaque */
+            display: block;
+            margin-bottom: 10px; /* Separación debajo de la tasa */
+            text-align: center;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 8px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
@@ -241,13 +252,17 @@
         🛒 **Tu Carrito** <span id="contador-carrito">0</span>
     </div>
     
+    <div id="tasa-bcv-info" class="tasa-bcv-display"></div>
+    
     <div class="brand-header">
-        <img src="logo_cachapera.png" alt="Logo El Sabor de la Cachapa" class="brand-logo"> <h1 class="brand-name">El Sabor de la Cachapa</h1> </div>
+        <img src="logo_cachapera.png" alt="Logo El Sabor de la Cachapa" class="brand-logo">
+        <h1 class="brand-name">El Sabor de la Cachapa</h1>
+    </div>
 
     <h2>MENU</h2>
     <div id="carrusel-categorias" class="loading-state">
         Cargando tasa BCV y menú ...
-        </div>
+    </div>
 
     <button id="prevCategoriaBtn" class="nav-categoria-btn" style="display:none;" onclick="cambiarCategoria(-1)">&#10094;</button>
     <button id="nextCategoriaBtn" class="nav-categoria-btn" style="display:none;" onclick="cambiarCategoria(1)">&#10095;</button>
@@ -264,22 +279,22 @@
     </button>
     
     <p class="footer-note">
-        *La Tasa BCV (obtenida por API) y el precio final de delivery serán confirmados al enviar el pedido.
+        *La Tasa BCV (mostrada arriba) y el precio final de delivery serán confirmados al enviar el pedido.
     </p>
 
 </div>
 
 <script>
-    // URL PÚBLICA DE TU GOOGLE SHEET EXPORTADA COMO CSV (ACTUALIZADO)
+    // URL PÚBLICA DE TU GOOGLE SHEET EXPORTADA COMO CSV
     const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRsTRhoswf3zopWO5PEusQsYdYglnUlWTX9HzFIvewpy4vED9fQbs9Z0V3EdQ-AGMGLlpmcs_LL_cP3/pub?gid=0&single=true&output=csv';
     
-    // API ACTUALIZADA: para obtener la tasa BCV en tiempo real (dolarapi.com)
+    // API para obtener la tasa BCV en tiempo real (dolarapi.com)
     const BCV_API_URL = 'https://ve.dolarapi.com/v1/dolar';
 
-    // Variable global para la tasa. Se inicializa con un valor de respaldo (BCV 2025-11-18: 236.3585 BS/USD)
-    let TASA_BCV_HOY = 236.3585; 
+    // VALOR DE RESPALDO ACTUALIZADO: Tasa BCV oficial para 19/11/2025: 240,3209 Bs/USD
+    let TASA_BCV_HOY = 240.3209; 
     
-    // NÚMERO DE WHATSAPP ACTUALIZADO
+    // NÚMERO DE WHATSAPP
     const NUMERO_WHATSAPP = "584122525407"; 
 
     // SEPARADOR DE COLUMNAS (COMA)
@@ -303,39 +318,46 @@
         carrito: document.getElementById('detalle-carrito'),
         contador: document.getElementById('contador-carrito'),
         prevBtn: document.getElementById('prevCategoriaBtn'),
-        nextBtn: document.getElementById('nextCategoriaBtn')
+        nextBtn: document.getElementById('nextCategoriaBtn'),
+        tasaInfo: document.getElementById('tasa-bcv-info') // Elemento para mostrar la tasa
     };
     
     // ===========================================
     // FUNCIONES PRINCIPALES DE FETCH Y RENDERIZADO
     // ===========================================
 
-    // FUNCIÓN ACTUALIZADA: Obtiene la tasa de la nueva API (dolarapi.com)
+    // FUNCIÓN MEJORADA: Obtiene la tasa de la API y actualiza la vista
     async function fetchTasaBCV() {
+        const respaldo = TASA_BCV_HOY; // Guardamos el valor de respaldo antes de intentar la API
+        let tasaObtenida = respaldo;
+        let fuente = "Respaldo";
+
         try {
             const response = await fetch(BCV_API_URL, { cache: 'no-store' }); 
             if (!response.ok) throw new Error(`API error! status: ${response.status}`);
             
             const data = await response.json();
             
-            // La nueva API retorna la tasa BCV bajo la ruta: data.dolarbcv.promedio
             if (data && data.dolarbcv && data.dolarbcv.promedio) {
-                TASA_BCV_HOY = parseFloat(data.dolarbcv.promedio);
-                
-                // NOTA: Se actualiza la información guardada del usuario.
-                console.log(`Tasa BCV actualizada exitosamente a: ${TASA_BCV_HOY}`);
-                
+                tasaObtenida = parseFloat(data.dolarbcv.promedio);
+                fuente = "BCV (API)";
             } else {
                 console.warn("API de DolarAPI no devolvió la tasa BCV esperada. Usando valor de respaldo.");
             }
         } catch (error) {
             console.error("Error al obtener la tasa BCV por API:", error);
-            // Si la API falla, se mantiene TASA_BCV_HOY en su valor de respaldo.
+            // Si la API falla, se mantiene el valor de respaldo.
         }
+        
+        // Actualizar la variable global
+        TASA_BCV_HOY = tasaObtenida;
+        
+        // Mostrar la tasa en la interfaz
+        secciones.tasaInfo.innerHTML = `🇻🇪 Tasa BCV: **1$ = ${TASA_BCV_HOY.toFixed(4)} Bs** <small>(${fuente})</small>`;
     }
 
     async function fetchDataAndRender() {
-        // 1. Obtener la tasa BCV de la API
+        // 1. Obtener la tasa BCV de la API (o usar respaldo)
         await fetchTasaBCV(); 
 
         // 2. Cargar y renderizar el menú
@@ -612,7 +634,7 @@
             return;
         }
 
-        // Título del negocio en el mensaje de WhatsApp (ACTUALIZADO)
+        // Título del negocio en el mensaje de WhatsApp
         let mensaje = `¡Hola! Me gustaría hacer un pedido desde el menú *El Sabor de la Cachapa*.\n\n`;
         let totalUSD = 0;
         
@@ -636,7 +658,8 @@
         const totalFinalBS = (totalUSD * TASA_BCV_HOY).toFixed(2);
         
         mensaje += `\n*💵 Total Aproximado:* $${totalFinalUSD}`;
-        mensaje += `\n*🇻🇪 Total Aproximado:* ${totalFinalBS} Bs (Tasa BCV Referencial: ${TASA_BCV_HOY.toFixed(4)})`;
+        mensaje += `\n*🇻🇪 Tasa BCV Usada:* ${TASA_BCV_HOY.toFixed(4)}`;
+        mensaje += `\n*🇻🇪 Total Aproximado:* ${totalFinalBS} Bs`;
         mensaje += `\n\n*Por favor, confírmenme el precio final incluyendo el delivery, si aplica.*`;
 
 
