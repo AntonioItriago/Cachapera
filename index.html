@@ -46,7 +46,7 @@
             vertical-align: middle; 
         }
         .brand-name {
-            font-size: 1.5em; /* Ajustado para el nombre largo */
+            font-size: 1.5em; 
             font-weight: bold;
             color: #d9534f; 
             margin: 0; 
@@ -247,6 +247,7 @@
 <body>
 
 <div class="main-container">
+
     <div class="header-carrito">
         🛒 **Tu Carrito** <span id="contador-carrito">0</span>
     </div>
@@ -367,8 +368,7 @@
                 actualizarVistaCarrito();
                 carruselContenedor.classList.remove('loading-state');
             } else {
-                 // Este mensaje es el que vemos en la captura
-                 carruselContenedor.innerHTML = '⚠️ No hay categorías para mostrar. Verifica que la columna **category** en tu hoja tenga valores para agrupar los productos.';
+                 carruselContenedor.innerHTML = '⚠️ No hay categorías para mostrar. Verifica que la columna **category** en tu hoja tenga valores y que el enlace CSV sea correcto.';
             }
 
         } catch (error) {
@@ -431,7 +431,7 @@
     function agruparProductos() {
         productosPorCategoria = productos.reduce((acc, p) => {
             if (p.categoria && p.categoria.trim() !== '' && p.id) {
-                const categoriaKey = p.categoria.toUpperCase(); // Agrupar siempre en mayúsculas
+                const categoriaKey = p.categoria.toUpperCase(); 
                 if (!acc[categoriaKey]) {
                     acc[categoriaKey] = [];
                 }
@@ -468,7 +468,7 @@
         carruselContenedor.innerHTML = '';
         
         if (categoriasOrdenadas.length === 0) {
-            carruselContenedor.innerHTML = '⚠️ No hay categorías para mostrar. Verifica que la columna **category** en tu hoja tenga valores para agrupar los productos.';
+            carruselContenedor.innerHTML = '⚠️ No hay categorías para mostrar. Verifica que la columna **category** en tu hoja tenga valores y que el enlace CSV sea correcto.';
             return;
         }
 
@@ -653,6 +653,7 @@
     // ===========================================
     // INICIALIZACIÓN
     // ===========================================
+    // Llama directamente a la función de carga del menú, omitiendo cualquier lógica de "pedir mesa".
     document.addEventListener('DOMContentLoaded', fetchDataAndRender);
 </script>
 </body>
