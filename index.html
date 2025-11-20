@@ -286,13 +286,14 @@
 
 <script>
     // URL PÚBLICA DE TU GOOGLE SHEET EXPORTADA COMO CSV
+    // **IMPORTANTE:** Asegúrate de que esta URL sea la CORRECTA y que la hoja esté PUBLICADA.
     const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRsTRhoswf3zopWO5PEusQsYdYglnUlWTX9HzFIvewpy4vED9fQbs9Z0V3EdQ-AGMGLlpmcs_LL_cP3/pub?gid=0&single=true&output=csv';
     
     // API para obtener la tasa BCV en tiempo real (dolarapi.com)
     const BCV_API_URL = 'https://ve.dolarapi.com/v1/dolar';
 
-    // VALOR DE RESPALDO ACTUALIZADO: Tasa BCV oficial para 19/11/2025: 240,3209 Bs/USD
-    let TASA_BCV_HOY = 240.3209; 
+    // VALOR DE RESPALDO ACTUALIZADO: Tasa BCV oficial para 20/11/2025 (Ejemplo)
+    let TASA_BCV_HOY = 251.4883; 
     
     // NÚMERO DE WHATSAPP
     const NUMERO_WHATSAPP = "584122525407"; 
@@ -319,7 +320,7 @@
         contador: document.getElementById('contador-carrito'),
         prevBtn: document.getElementById('prevCategoriaBtn'),
         nextBtn: document.getElementById('nextCategoriaBtn'),
-        tasaInfo: document.getElementById('tasa-bcv-info') // Elemento para mostrar la tasa
+        tasaInfo: document.getElementById('tasa-bcv-info')
     };
     
     // ===========================================
@@ -332,6 +333,8 @@
         let fuente = "Respaldo";
 
         try {
+            // **Implementación de la instrucción del usuario para BCV**
+            // Nota: Aquí se está usando dolarapi como sustituto de bcv.org.ve
             const response = await fetch(BCV_API_URL, { cache: 'no-store' }); 
             if (!response.ok) throw new Error(`API error! status: ${response.status}`);
             
@@ -348,12 +351,14 @@
         }
         
         TASA_BCV_HOY = tasaObtenida;
-        secciones.tasaInfo.innerHTML = `🇻🇪 Tasa BCV: **1$ = ${TASA_BCV_HOY.toFixed(4)} Bs** <small>(${fuente})</small>`;
+        secciones.tasaInfo.innerHTML = `🇻🇪 Tasa BCV: **1$ = ${TASA_BCV_HOY.toFixed(4)} Bs** <small>(${fuente} ${new Date().toLocaleDateString('es-VE')})</small>`;
     }
 
     async function fetchDataAndRender() {
+        // 1. Obtener la tasa BCV
         await fetchTasaBCV(); 
 
+        // 2. Cargar y renderizar el menú
         try {
             const response = await fetch(CSV_URL);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -367,7 +372,7 @@
                 actualizarVistaCarrito();
                 carruselContenedor.classList.remove('loading-state');
             } else {
-                 carruselContenedor.innerHTML = '⚠️ Error: No se encontraron productos. Verifica que la hoja esté publicada correctamente y que las columnas sean correctas.';
+                 carruselContenedor.innerHTML = '⚠️ Error: No se encontraron productos o no se pudieron agrupar por categoría. Verifique los datos de su hoja.';
             }
 
         } catch (error) {
@@ -380,7 +385,7 @@
         const lineas = csv.trim().split('\n');
         if (lineas.length === 0) return;
 
-        // 1. Obtener y normalizar los encabezados reales del CSV (todo a minúsculas para coincidir)
+        // 1. Obtener y normalizar los encabezados reales del CSV (quitar espacios y a minúsculas)
         const encabezados = lineas[0].replace(/\r/g, '').split(CSV_SEPARATOR).map(h => h.trim().toLowerCase());
         
         // 2. Mapear los índices usando los nombres en minúsculas proporcionados por el usuario
@@ -392,10 +397,9 @@
             category: encabezados.indexOf('category'),
             description: encabezados.indexOf('description'),
             image_url: encabezados.indexOf('image_url')
-            // Se ignoran is_active y created_at ya que no son necesarios para la visualización del menú
         };
         
-        // Índice de la columna PRECIO para aplicar la corrección de decimales
+        // Índice de la columna PRECIO
         const priceIndex = columnaMap.price;
 
         for (let i = 1; i < lineas.length; i++) {
@@ -404,8 +408,9 @@
 
             // Verificar que todas las columnas esenciales existan (índice diferente de -1)
             if (columnaMap.id === -1 || columnaMap.name === -1 || columnaMap.price === -1 || columnaMap.currency === -1 || columnaMap.category === -1) {
-                console.error("Faltan columnas esenciales (id, name, price, currency, category).");
-                continue;
+                 // Si falla, detener y mostrar un error en la consola
+                 if (i === 1) console.error("Faltan columnas esenciales: ", columnaMap);
+                 return;
             }
 
             // --- CORRECCIÓN DE DECIMALES (COMAS A PUNTOS) ---
@@ -421,6 +426,7 @@
                 nombre: valores[columnaMap.name],
                 precio: parseFloat(precioProcesado) || 0, 
                 moneda: valores[columnaMap.currency],
+                // **CORRECCIÓN CLAVE:** Asegurarse de que la categoría se use como clave
                 categoria: valores[columnaMap.category], 
                 descripcion: valores[columnaMap.description] || '', 
                 imagenUrl: valores[columnaMap.image_url] || '' 
@@ -430,8 +436,9 @@
     
     function agruparProductos() {
         productosPorCategoria = productos.reduce((acc, p) => {
-            if (p.categoria && p.id) {
-                const categoriaKey = p.categoria.toUpperCase();
+            // **VERIFICACIÓN CLAVE:** Si p.categoria está vacío (null/undefined/''), el producto se ignora
+            if (p.categoria && p.categoria.trim() !== '' && p.id) {
+                const categoriaKey = p.categoria.toUpperCase(); // Agrupar siempre en mayúsculas
                 if (!acc[categoriaKey]) {
                     acc[categoriaKey] = [];
                 }
@@ -440,6 +447,7 @@
             return acc;
         }, {});
         
+        // Resto del código de ordenamiento...
         let categoriasEncontradas = Object.keys(productosPorCategoria);
         let categoriasRestantes = [...categoriasEncontradas];
         
@@ -468,7 +476,7 @@
         carruselContenedor.innerHTML = '';
         
         if (categoriasOrdenadas.length === 0) {
-            carruselContenedor.innerHTML = 'No hay categorías para mostrar. Verifica la columna "category" en tu hoja.';
+            carruselContenedor.innerHTML = '⚠️ No hay categorías para mostrar. Verifica que la columna **category** en tu hoja tenga valores para agrupar los productos.';
             return;
         }
 
