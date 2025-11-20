@@ -292,7 +292,6 @@
     const BCV_API_URL = 'https://ve.dolarapi.com/v1/dolar';
 
     // VALOR DE RESPALDO ACTUALIZADO: Tasa BCV oficial para 19/11/2025: 240,3209 Bs/USD
-    // **NOTA:** La tasa real se obtendrá automáticamente con la API al iniciar la web.
     let TASA_BCV_HOY = 240.3209; 
     
     // NÚMERO DE WHATSAPP
@@ -327,9 +326,8 @@
     // FUNCIONES PRINCIPALES DE FETCH Y RENDERIZADO
     // ===========================================
 
-    // FUNCIÓN MEJORADA: Obtiene la tasa de la API y actualiza la vista
     async function fetchTasaBCV() {
-        const respaldo = TASA_BCV_HOY; // Guardamos el valor de respaldo antes de intentar la API
+        const respaldo = TASA_BCV_HOY;
         let tasaObtenida = respaldo;
         let fuente = "Respaldo";
 
@@ -347,21 +345,15 @@
             }
         } catch (error) {
             console.error("Error al obtener la tasa BCV por API:", error);
-            // Si la API falla, se mantiene el valor de respaldo.
         }
         
-        // Actualizar la variable global
         TASA_BCV_HOY = tasaObtenida;
-        
-        // Mostrar la tasa en la interfaz
         secciones.tasaInfo.innerHTML = `🇻🇪 Tasa BCV: **1$ = ${TASA_BCV_HOY.toFixed(4)} Bs** <small>(${fuente})</small>`;
     }
 
     async function fetchDataAndRender() {
-        // 1. Obtener la tasa BCV de la API (o usar respaldo)
         await fetchTasaBCV(); 
 
-        // 2. Cargar y renderizar el menú
         try {
             const response = await fetch(CSV_URL);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -388,37 +380,50 @@
         const lineas = csv.trim().split('\n');
         if (lineas.length === 0) return;
 
-        // Limpiamos los encabezados de retornos de carro y los ponemos en mayúsculas
-        const encabezados = lineas[0].replace(/\r/g, '').split(CSV_SEPARATOR).map(h => h.trim().toUpperCase());
+        // 1. Obtener y normalizar los encabezados reales del CSV (todo a minúsculas para coincidir)
+        const encabezados = lineas[0].replace(/\r/g, '').split(CSV_SEPARATOR).map(h => h.trim().toLowerCase());
         
-        // Encontramos el índice de la columna PRECIO para aplicar la corrección de decimales
-        const precioIndex = encabezados.indexOf('PRECIO');
+        // 2. Mapear los índices usando los nombres en minúsculas proporcionados por el usuario
+        const columnaMap = {
+            id: encabezados.indexOf('id'),
+            name: encabezados.indexOf('name'),
+            price: encabezados.indexOf('price'),
+            currency: encabezados.indexOf('currency'),
+            category: encabezados.indexOf('category'),
+            description: encabezados.indexOf('description'),
+            image_url: encabezados.indexOf('image_url')
+            // Se ignoran is_active y created_at ya que no son necesarios para la visualización del menú
+        };
+        
+        // Índice de la columna PRECIO para aplicar la corrección de decimales
+        const priceIndex = columnaMap.price;
 
         for (let i = 1; i < lineas.length; i++) {
             const valores = lineas[i].replace(/\r/g, '').split(CSV_SEPARATOR).map(v => v.trim());
             if (valores.length !== encabezados.length) continue; 
 
-            let producto = {};
-            for (let j = 0; j < encabezados.length; j++) {
-                producto[encabezados[j]] = valores[j];
+            // Verificar que todas las columnas esenciales existan (índice diferente de -1)
+            if (columnaMap.id === -1 || columnaMap.name === -1 || columnaMap.price === -1 || columnaMap.currency === -1 || columnaMap.category === -1) {
+                console.error("Faltan columnas esenciales (id, name, price, currency, category).");
+                continue;
             }
-            
+
             // --- CORRECCIÓN DE DECIMALES (COMAS A PUNTOS) ---
-            let precioProcesado = producto.PRECIO;
-            if (precioIndex !== -1 && valores[precioIndex] && valores[precioIndex].includes(',')) {
-                precioProcesado = valores[precioIndex].replace(',', '.');
+            let precioProcesado = valores[priceIndex];
+            if (valores[priceIndex] && valores[priceIndex].includes(',')) {
+                precioProcesado = valores[priceIndex].replace(',', '.');
             }
             // -----------------------------------------------
             
-            // Mapeo de columnas
+            // Mapeo de columnas a la estructura de productos
             productos.push({
-                id: producto.ID,
-                nombre: producto.NOMBRE,
-                precio: parseFloat(precioProcesado) || 0, // Usamos el precio procesado
-                moneda: producto.MONEDA,
-                categoria: producto.CATEGORIA, 
-                descripcion: producto.DESCRIPCION || '', 
-                imagenUrl: producto.IMAGENURL || '' 
+                id: valores[columnaMap.id],
+                nombre: valores[columnaMap.name],
+                precio: parseFloat(precioProcesado) || 0, 
+                moneda: valores[columnaMap.currency],
+                categoria: valores[columnaMap.category], 
+                descripcion: valores[columnaMap.description] || '', 
+                imagenUrl: valores[columnaMap.image_url] || '' 
             });
         }
     }
@@ -426,7 +431,6 @@
     function agruparProductos() {
         productosPorCategoria = productos.reduce((acc, p) => {
             if (p.categoria && p.id) {
-                // Convertimos la categoría a mayúsculas para la clave
                 const categoriaKey = p.categoria.toUpperCase();
                 if (!acc[categoriaKey]) {
                     acc[categoriaKey] = [];
@@ -436,27 +440,21 @@
             return acc;
         }, {});
         
-        // --- LÓGICA DE ORDENAMIENTO PERSONALIZADO ---
         let categoriasEncontradas = Object.keys(productosPorCategoria);
         let categoriasRestantes = [...categoriasEncontradas];
         
-        // 1. Añadir las categorías en el orden deseado
         categoriasOrdenadas = ORDEN_CATEGORIAS_PREFERIDO.filter(orden => {
             const index = categoriasRestantes.indexOf(orden);
             if (index !== -1) {
-                categoriasRestantes.splice(index, 1); // Remover de las restantes
+                categoriasRestantes.splice(index, 1);
                 return true;
             }
             return false;
         });
 
-        // 2. Añadir el resto de categorías al final, ordenadas alfabéticamente
         categoriasRestantes.sort();
         categoriasOrdenadas = categoriasOrdenadas.concat(categoriasRestantes);
-        // --------------------------------------------------
-
-
-        // Muestra/Oculta los botones de navegación si hay más de 1 categoría
+        
         if (categoriasOrdenadas.length > 1) {
             secciones.prevBtn.style.display = 'block';
             secciones.nextBtn.style.display = 'block';
@@ -466,12 +464,11 @@
         }
     }
 
-    // Función principal para renderizar el carrusel y la categoría activa
     function renderizarCarrusel() {
         carruselContenedor.innerHTML = '';
         
         if (categoriasOrdenadas.length === 0) {
-            carruselContenedor.innerHTML = 'No hay categorías para mostrar. Verifica la columna "CATEGORIA" en tu hoja.';
+            carruselContenedor.innerHTML = 'No hay categorías para mostrar. Verifica la columna "category" en tu hoja.';
             return;
         }
 
@@ -500,7 +497,6 @@
                 controlesHTML = `<button class="btn-add" onclick="cambiarCantidad('${id}', 1)">➕ Añadir</button>`;
             }
 
-            // Renderiza el ítem con imagen (si la URL existe)
             const imagenTag = producto.imagenUrl ? `<img src="${producto.imagenUrl}" alt="${producto.nombre}" class="item-thumb">` : '';
 
             categoriaHTML += `
@@ -521,23 +517,19 @@
         carruselContenedor.innerHTML = categoriaHTML;
     }
 
-    // Función para cambiar de categoría en el carrusel
     function cambiarCategoria(delta) {
         let nuevoIndex = categoriaActualIndex + delta;
         
         if (nuevoIndex >= 0 && nuevoIndex < categoriasOrdenadas.length) {
             categoriaActualIndex = nuevoIndex;
         } else if (nuevoIndex < 0) {
-            // Ir al final si se intenta ir hacia atrás desde el inicio
             categoriaActualIndex = categoriasOrdenadas.length - 1;
         } else if (nuevoIndex >= categoriasOrdenadas.length) {
-            // Ir al inicio si se intenta ir hacia adelante desde el final
             categoriaActualIndex = 0;
         }
         renderizarCarrusel();
     }
     
-    // Función para manejar la cantidad de productos en el carrito
     function cambiarCantidad(productoId, delta) {
         let itemIndex = carrito.findIndex(item => item.id === productoId);
         const productoAAgregar = productos.find(p => p.id === productoId);
@@ -568,7 +560,6 @@
       return carrito.reduce((total, item) => total + item.cantidad, 0);
     }
 
-    // Función para actualizar el resumen del carrito (vista en la página)
     function actualizarVistaCarrito() {
         const totalItems = calcularTotalItems();
         secciones.contador.textContent = totalItems;
@@ -587,7 +578,6 @@
         carrito.forEach(item => {
             let subtotal = item.precio * item.cantidad;
             
-            // Cálculo del total
             if (item.moneda === '$') {
                 totalPagarUSD += subtotal;
                 totalPagarBS += subtotal * TASA_BCV_HOY;
@@ -597,8 +587,6 @@
             }
             
             let precioUnitario = item.moneda === '$' ? `$${item.precio.toFixed(2)}` : `${item.precio.toFixed(2)} ${item.moneda}`;
-            
-            // El subtotal se muestra en la moneda original del producto
             let subtotalFormateado = item.moneda === '$' ? `$${subtotal.toFixed(2)}` : `${subtotal.toFixed(2)} ${item.moneda}`;
 
 
@@ -614,7 +602,6 @@
             `;
         });
         
-        // CÁLCULO DEL TOTAL
         const totalUSD = totalPagarUSD.toFixed(2);
         const totalBS = totalPagarBS.toFixed(2);
         
@@ -628,14 +615,12 @@
         secciones.carrito.innerHTML = contenidoHTML;
     }
     
-    // Función para generar el mensaje de WhatsApp y abrir el enlace
     function consultarPrecios() {
         if (carrito.length === 0) {
             alert("Tu carrito está vacío. ¡Agrega productos para hacer tu pedido!");
             return;
         }
 
-        // Título del negocio en el mensaje de WhatsApp
         let mensaje = `¡Hola! Me gustaría hacer un pedido desde el menú *El Sabor de la Cachapa*.\n\n`;
         let totalUSD = 0;
         
@@ -643,18 +628,15 @@
         carrito.forEach(item => {
             const subtotal = item.precio * item.cantidad;
             
-            // Calcula total en USD para el resumen
             if (item.moneda === '$') {
                 totalUSD += subtotal;
                 mensaje += `- ${item.cantidad}x ${item.nombre} ($${subtotal.toFixed(2)})\n`;
             } else {
-                // Convertir a USD para la suma total aproximada
                 totalUSD += subtotal / TASA_BCV_HOY;
                 mensaje += `- ${item.cantidad}x ${item.nombre} (${subtotal.toFixed(2)} ${item.moneda})\n`;
             }
         });
 
-        // Usamos la tasa BCV obtenida (o de respaldo) para el mensaje
         const totalFinalUSD = totalUSD.toFixed(2);
         const totalFinalBS = (totalUSD * TASA_BCV_HOY).toFixed(2);
         
@@ -671,7 +653,6 @@
     // ===========================================
     // INICIALIZACIÓN
     // ===========================================
-    // Ejecutar la carga de datos al iniciar
     document.addEventListener('DOMContentLoaded', fetchDataAndRender);
 </script>
 </body>
